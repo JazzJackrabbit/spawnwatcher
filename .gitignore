@@ -1,0 +1,8 @@
+node_modules/
+dist/
+/data/
+/config/secrets.enc.yaml
+.env
+*.db
+*.db-shm
+*.db-wal

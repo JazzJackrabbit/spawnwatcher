@@ -1,0 +1,15 @@
+{
+  "healthchecks": {
+    "web": [
+      {
+        "type": "startup",
+        "name": "healthz",
+        "path": "/healthz",
+        "content": "ok",
+        "attempts": 10,
+        "wait": 3,
+        "timeout": 5
+      }
+    ]
+  }
+}

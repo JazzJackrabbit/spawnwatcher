@@ -1,0 +1,9 @@
+# SOPS encryption rules for config/secrets.enc.yaml. Values are encrypted with
+# every age recipient below; key names stay plaintext so diffs stay readable.
+#
+# Adding a machine or a person: append their age public key, then re-key the
+# file with `make env-rekey`.
+creation_rules:
+  - path_regex: config/secrets\.enc\.yaml$
+    age: >-
+      age17p4sqz4vf27nsn0fgsqacg26pxpegdy0l4hpp099pt09hz996dqs6lped7
