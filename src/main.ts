@@ -32,6 +32,21 @@ async function main(): Promise<void> {
   const store = new Store(cfg.dbPath);
   const watcher = new Watcher(cfg, store, log);
 
+  // `spawnwatcher stats` prints an operational summary of the database and
+  // exits — the answer to "is it healthy?" without attaching a SQLite shell.
+  if (process.argv[2] === "stats") {
+    const s = store.stats();
+    const line = (label: string, value: unknown) =>
+      process.stdout.write(`${label.padEnd(20)} ${String(value)}\n`);
+    line("items", s.items);
+    line("events", s.events);
+    line("deliveries", `${s.deliveredDeliveries} delivered, ${s.pendingDeliveries} pending`);
+    line("next retry", s.nextRetryAt ? rfc3339(s.nextRetryAt) : "—");
+    line("last snapshot", s.lastSnapshotAt ? `${rfc3339(s.lastSnapshotAt)} (etag ${s.lastSnapshotEtag || "none"})` : "never");
+    store.close();
+    return;
+  }
+
   if (process.argv[2] === "backfill") {
     const days = Number.parseInt(process.argv[3] ?? "30", 10) || 30;
     const since = new Date(Date.now() - days * 24 * 3_600_000);

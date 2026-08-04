@@ -88,3 +88,28 @@ describe("delivery lifecycle", () => {
     expect(store.dueDeliveries(new Date(now.getTime() + 24 * 3_600_000))).toHaveLength(0);
   });
 });
+
+describe("stats", () => {
+  it("summarizes items, deliveries, and the latest snapshot", () => {
+    const store = open();
+    const now = new Date();
+    store.saveCycle(snap(now, Buffer.from("gz"), '"e1"'), [entry("sw_s1", "m-1", now), entry("sw_s2", "m-2", now)], true);
+    store.markDelivered("sw_s1", now);
+
+    const s = store.stats();
+    expect(s.items).toBe(2);
+    expect(s.events).toBe(2);
+    expect(s.deliveredDeliveries).toBe(1);
+    expect(s.pendingDeliveries).toBe(1);
+    expect(s.nextRetryAt).not.toBeNull();
+    expect(s.lastSnapshotEtag).toBe('"e1"');
+  });
+
+  it("reports an empty database without snapshots", () => {
+    const s = open().stats();
+    expect(s.items).toBe(0);
+    expect(s.pendingDeliveries).toBe(0);
+    expect(s.nextRetryAt).toBeNull();
+    expect(s.lastSnapshotAt).toBeNull();
+  });
+});

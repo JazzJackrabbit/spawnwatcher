@@ -96,6 +96,16 @@ export interface Delivery {
   attempts: number;
 }
 
+export interface Stats {
+  items: number;
+  events: number;
+  pendingDeliveries: number;
+  deliveredDeliveries: number;
+  nextRetryAt: Date | null;
+  lastSnapshotAt: Date | null;
+  lastSnapshotEtag: string | null;
+}
+
 /** RFC3339 with second precision, matching what's already stored. */
 export function rfc3339(d: Date): string {
   return d.toISOString().replace(/\.\d{3}Z$/, "Z");
@@ -237,6 +247,32 @@ export class Store {
         publishedAt: new Date(r.published_at!),
       },
     }));
+  }
+
+  /** A one-shot operational summary for the `stats` CLI command. */
+  stats(): Stats {
+    const one = <T>(sql: string): T => this.db.prepare(sql).get() as T;
+    const items = one<{ n: number }>("SELECT COUNT(*) AS n FROM items").n;
+    const events = one<{ n: number }>("SELECT COUNT(*) AS n FROM events").n;
+    const deliveries = one<{ pending: number; delivered: number }>(
+      `SELECT
+         COUNT(*) FILTER (WHERE status = 'pending')   AS pending,
+         COUNT(*) FILTER (WHERE status = 'delivered') AS delivered
+       FROM deliveries`,
+    );
+    const nextTry = one<{ at: string | null }>(
+      "SELECT MIN(next_try_at) AS at FROM deliveries WHERE status = 'pending'",
+    ).at;
+    const snapshot = this.latestSnapshot();
+    return {
+      items,
+      events,
+      pendingDeliveries: deliveries.pending,
+      deliveredDeliveries: deliveries.delivered,
+      nextRetryAt: nextTry ? new Date(nextTry) : null,
+      lastSnapshotAt: snapshot?.fetchedAt ?? null,
+      lastSnapshotEtag: snapshot?.etag ?? null,
+    };
   }
 
   markDelivered(itemId: string, at: Date): void {
