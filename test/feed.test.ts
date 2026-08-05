@@ -86,3 +86,22 @@ describe("public feed", () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe("conditional requests", () => {
+  it("answers a matching If-None-Match with 304", async () => {
+    const first = await fetch(`${srv.url}/feed.json`);
+    const etag = first.headers.get("etag");
+    expect(etag).toBeTruthy();
+
+    const second = await fetch(`${srv.url}/feed.json`, { headers: { "If-None-Match": etag! } });
+    expect(second.status).toBe(304);
+    expect(await second.text()).toBe("");
+  });
+
+  it("serves headers without a body for HEAD", async () => {
+    const res = await fetch(`${srv.url}/`, { method: "HEAD" });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("etag")).toBeTruthy();
+    expect(await res.text()).toBe("");
+  });
+});

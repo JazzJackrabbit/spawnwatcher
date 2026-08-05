@@ -3,6 +3,7 @@
  * fields of an item are exposed; the structured summaries delivered to
  * spawn never appear here.
  */
+import { createHash } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import type { Item, Store } from "./store.js";
@@ -25,15 +26,15 @@ export class FeedHandler {
     if (req.method !== "GET" && req.method !== "HEAD") return false;
     switch (path) {
       case "/":
-        this.render(res, "text/html; charset=utf-8", indexHtml);
+        this.render(req, res, "text/html; charset=utf-8", indexHtml);
         return true;
       case "/feed.json":
-        this.render(res, "application/feed+json; charset=utf-8", (items) =>
+        this.render(req, res, "application/feed+json; charset=utf-8", (items) =>
           JSON.stringify(jsonFeed(this.publicUrl, items)),
         );
         return true;
       case "/rss.xml":
-        this.render(res, "application/rss+xml; charset=utf-8", (items) =>
+        this.render(req, res, "application/rss+xml; charset=utf-8", (items) =>
           rssXml(this.publicUrl, items),
         );
         return true;
@@ -50,17 +51,31 @@ export class FeedHandler {
     }
   }
 
-  private render(res: ServerResponse, contentType: string, body: (items: Item[]) => string): void {
-    let items: Item[];
+  // Bodies are cheap to render but not free to send: an ETag over the
+  // rendered output lets feed readers polling on short intervals pay a 304
+  // instead of the full document.
+  private render(
+    req: IncomingMessage,
+    res: ServerResponse,
+    contentType: string,
+    body: (items: Item[]) => string,
+  ): void {
+    let payload: string;
     try {
-      items = this.store.listItems(PAGE_SIZE);
+      payload = body(this.store.listItems(PAGE_SIZE));
     } catch (err) {
       this.log.error("feed request failed", { error: String(err) });
       res.writeHead(500).end("internal error");
       return;
     }
-    res.writeHead(200, { "Content-Type": contentType, "Cache-Control": CACHE });
-    res.end(body(items));
+    const etag = `"${createHash("sha256").update(payload).digest("hex").slice(0, 16)}"`;
+    const headers = { "Content-Type": contentType, "Cache-Control": CACHE, ETag: etag };
+    if (req.headers["if-none-match"] === etag) {
+      res.writeHead(304, headers).end();
+      return;
+    }
+    res.writeHead(200, headers);
+    res.end(req.method === "HEAD" ? undefined : payload);
   }
 }
 
