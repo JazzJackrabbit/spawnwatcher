@@ -118,12 +118,17 @@ function rssXml(publicUrl: string, items: Item[]): string {
     </item>`,
     )
     .join("\n");
+  // Strict validators require a self-referencing atom:link and want a
+  // lastBuildDate; the newest item is the honest build time.
+  const built = items[0]?.publishedAt ?? new Date();
   return `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>spawnwatcher — LLM model releases</title>
     <link>${esc(publicUrl)}</link>
+    <atom:link href="${esc(publicUrl)}/rss.xml" rel="self" type="application/rss+xml"/>
     <description>New and updated models from the major LLM providers, detected from the models.dev catalog.</description>
+    <lastBuildDate>${built.toUTCString()}</lastBuildDate>
 ${rows}
   </channel>
 </rss>

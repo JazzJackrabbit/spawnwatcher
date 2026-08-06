@@ -74,6 +74,8 @@ describe("public feed", () => {
     const body = await res.text();
     expect(body).toContain("<rss");
     expect(body).toContain("Anthropic releases M1");
+    expect(body).toContain('rel="self"');
+    expect(body).toContain("<lastBuildDate>");
   });
 
   it("answers healthz with ok", async () => {
