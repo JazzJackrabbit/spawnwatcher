@@ -206,13 +206,13 @@ export class Store {
     }
   }
 
-  listItems(limit: number): Item[] {
+  listItems(limit: number, offset = 0): Item[] {
     const rows = this.db
       .prepare(
         `SELECT id, title, summary_md, agent_summary, generator, source_url, kind, published_at
-         FROM items ORDER BY published_at DESC, id DESC LIMIT ?`,
+         FROM items ORDER BY published_at DESC, id DESC LIMIT ? OFFSET ?`,
       )
-      .all(limit) as Record<string, string>[];
+      .all(limit, offset) as Record<string, string>[];
     return rows.map((r) => ({
       id: r.id!,
       title: r.title!,

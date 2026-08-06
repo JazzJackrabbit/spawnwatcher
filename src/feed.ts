@@ -22,20 +22,31 @@ export class FeedHandler {
 
   /** Routes a request; returns false when the path is not one of ours. */
   handle(req: IncomingMessage, res: ServerResponse): boolean {
-    const path = (req.url ?? "/").split("?")[0];
+    const url = new URL(req.url ?? "/", "http://localhost");
     if (req.method !== "GET" && req.method !== "HEAD") return false;
-    switch (path) {
-      case "/":
-        this.render(req, res, "text/html; charset=utf-8", indexHtml);
+    switch (url.pathname) {
+      case "/": {
+        const page = Math.max(1, Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1);
+        this.render(req, res, "text/html; charset=utf-8", () => {
+          // One extra row answers "is there an older page?" without a COUNT.
+          const items = this.store.listItems(PAGE_SIZE + 1, (page - 1) * PAGE_SIZE);
+          return indexHtml(items.slice(0, PAGE_SIZE), page, items.length > PAGE_SIZE);
+        });
         return true;
-      case "/feed.json":
-        this.render(req, res, "application/feed+json; charset=utf-8", (items) =>
-          JSON.stringify(jsonFeed(this.publicUrl, items)),
+      }
+      case "/feed.json": {
+        const limit = Math.min(
+          200,
+          Math.max(1, Number.parseInt(url.searchParams.get("limit") ?? "", 10) || PAGE_SIZE),
+        );
+        this.render(req, res, "application/feed+json; charset=utf-8", () =>
+          JSON.stringify(jsonFeed(this.publicUrl, this.store.listItems(limit))),
         );
         return true;
+      }
       case "/rss.xml":
-        this.render(req, res, "application/rss+xml; charset=utf-8", (items) =>
-          rssXml(this.publicUrl, items),
+        this.render(req, res, "application/rss+xml; charset=utf-8", () =>
+          rssXml(this.publicUrl, this.store.listItems(PAGE_SIZE)),
         );
         return true;
       case "/healthz":
@@ -58,11 +69,11 @@ export class FeedHandler {
     req: IncomingMessage,
     res: ServerResponse,
     contentType: string,
-    body: (items: Item[]) => string,
+    body: () => string,
   ): void {
     let payload: string;
     try {
-      payload = body(this.store.listItems(PAGE_SIZE));
+      payload = body();
     } catch (err) {
       this.log.error("feed request failed", { error: String(err) });
       res.writeHead(500).end("internal error");
@@ -119,7 +130,7 @@ ${rows}
 `;
 }
 
-function indexHtml(items: Item[]): string {
+function indexHtml(items: Item[], page: number, hasOlder: boolean): string {
   const dateFmt = new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
@@ -144,6 +155,11 @@ ${items
   })
   .join("\n")}
   </ol>`;
+
+  const nav: string[] = [];
+  if (page > 1) nav.push(`<a href="${page === 2 ? "/" : `/?page=${page - 1}`}">← Newer</a>`);
+  if (hasOlder) nav.push(`<a href="/?page=${page + 1}">Older →</a>`);
+  const pager = nav.length > 0 ? `<footer class="pager">${nav.join("<span> · </span>")}</footer>` : "";
 
   return `<!doctype html>
 <html lang="en">
@@ -181,6 +197,10 @@ ${items
   h2 a:hover { text-decoration: underline; }
   li p { margin: 0; color: var(--muted); font-size: .93rem; }
   .empty { border-top: 1px solid var(--line); margin-top: 2.25rem; padding: 3rem 0; color: var(--muted); text-align: center; }
+  .pager { border-top: 1px solid var(--line); padding: 1.15rem 0; font-size: .85rem; }
+  .pager a { color: var(--muted); text-decoration: none; }
+  .pager a:hover { color: var(--fg); }
+  .pager span { color: var(--muted); margin: 0 .35rem; }
 </style>
 </head>
 <body>
@@ -191,6 +211,7 @@ ${items
     <nav><a href="/feed.json">JSON Feed</a><a href="/rss.xml">RSS</a></nav>
   </header>
   ${list}
+  ${pager}
 </main>
 </body>
 </html>

@@ -105,3 +105,22 @@ describe("conditional requests", () => {
     expect(await res.text()).toBe("");
   });
 });
+
+describe("pagination", () => {
+  it("pages the index and caps the JSON limit", async () => {
+    // Page 2 of a one-item feed is empty and offers a way back.
+    const page2 = await (await fetch(`${srv.url}/?page=2`)).text();
+    expect(page2).toContain("Nothing yet");
+    expect(page2).toContain("← Newer");
+
+    const page1 = await (await fetch(`${srv.url}/`)).text();
+    expect(page1).not.toContain("Older →");
+
+    const limited = await fetch(`${srv.url}/feed.json?limit=1`);
+    const feed = JSON.parse(await limited.text()) as { items: unknown[] };
+    expect(feed.items).toHaveLength(1);
+
+    // Nonsense limits fall back to the default instead of erroring.
+    expect((await fetch(`${srv.url}/feed.json?limit=banana`)).status).toBe(200);
+  });
+});
