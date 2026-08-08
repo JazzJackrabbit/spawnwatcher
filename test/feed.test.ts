@@ -126,3 +126,18 @@ describe("pagination", () => {
     expect((await fetch(`${srv.url}/feed.json?limit=banana`)).status).toBe(200);
   });
 });
+
+describe("provider filter", () => {
+  it("filters the index by provider and ignores unknown values", async () => {
+    const anthropic = await (await fetch(`${srv.url}/?provider=anthropic`)).text();
+    expect(anthropic).toContain("Anthropic releases M1");
+    expect(anthropic).toContain('class="on"');
+
+    const openai = await (await fetch(`${srv.url}/?provider=openai`)).text();
+    expect(openai).toContain("Nothing yet");
+
+    // Unknown providers fall back to the unfiltered view.
+    const bogus = await (await fetch(`${srv.url}/?provider=bogus`)).text();
+    expect(bogus).toContain("Anthropic releases M1");
+  });
+});

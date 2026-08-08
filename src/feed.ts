@@ -13,6 +13,16 @@ import type { Logger } from "./watcher.js";
 const PAGE_SIZE = 50;
 const CACHE = "public, max-age=300";
 
+/** The providers worth a filter chip, in display order. */
+const PROVIDER_LABELS: Record<string, string> = {
+  anthropic: "Anthropic",
+  openai: "OpenAI",
+  google: "Google",
+  xai: "xAI",
+  perplexity: "Perplexity",
+  openrouter: "OpenRouter",
+};
+
 export class FeedHandler {
   constructor(
     private readonly store: Store,
@@ -27,10 +37,12 @@ export class FeedHandler {
     switch (url.pathname) {
       case "/": {
         const page = Math.max(1, Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1);
+        const wanted = url.searchParams.get("provider") ?? "";
+        const provider = PROVIDER_LABELS[wanted] ? wanted : "";
         this.render(req, res, "text/html; charset=utf-8", () => {
           // One extra row answers "is there an older page?" without a COUNT.
-          const items = this.store.listItems(PAGE_SIZE + 1, (page - 1) * PAGE_SIZE);
-          return indexHtml(items.slice(0, PAGE_SIZE), page, items.length > PAGE_SIZE);
+          const items = this.store.listItems(PAGE_SIZE + 1, (page - 1) * PAGE_SIZE, provider || undefined);
+          return indexHtml(items.slice(0, PAGE_SIZE), page, items.length > PAGE_SIZE, provider);
         });
         return true;
       }
@@ -135,7 +147,22 @@ ${rows}
 `;
 }
 
-function indexHtml(items: Item[], page: number, hasOlder: boolean): string {
+function indexHtml(items: Item[], page: number, hasOlder: boolean, provider: string): string {
+  const withPage = (p: number) => {
+    const params = new URLSearchParams();
+    if (provider) params.set("provider", provider);
+    if (p > 1) params.set("page", String(p));
+    const qs = params.toString();
+    return qs ? `/?${qs}` : "/";
+  };
+  const chips = ["", ...Object.keys(PROVIDER_LABELS)]
+    .map((id) => {
+      const label = id === "" ? "All" : PROVIDER_LABELS[id];
+      const href = id === "" ? "/" : `/?provider=${id}`;
+      const active = id === provider ? ' class="on"' : "";
+      return `<a href="${href}"${active}>${label}</a>`;
+    })
+    .join("");
   const dateFmt = new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
@@ -162,8 +189,8 @@ ${items
   </ol>`;
 
   const nav: string[] = [];
-  if (page > 1) nav.push(`<a href="${page === 2 ? "/" : `/?page=${page - 1}`}">← Newer</a>`);
-  if (hasOlder) nav.push(`<a href="/?page=${page + 1}">Older →</a>`);
+  if (page > 1) nav.push(`<a href="${withPage(page - 1)}">← Newer</a>`);
+  if (hasOlder) nav.push(`<a href="${withPage(page + 1)}">Older →</a>`);
   const pager = nav.length > 0 ? `<footer class="pager">${nav.join("<span> · </span>")}</footer>` : "";
 
   return `<!doctype html>
@@ -202,6 +229,10 @@ ${items
   h2 a:hover { text-decoration: underline; }
   li p { margin: 0; color: var(--muted); font-size: .93rem; }
   .empty { border-top: 1px solid var(--line); margin-top: 2.25rem; padding: 3rem 0; color: var(--muted); text-align: center; }
+  .chips { margin-top: 1.6rem; display: flex; flex-wrap: wrap; gap: .4rem; font-size: .8rem; }
+  .chips a { color: var(--muted); text-decoration: none; background: var(--chip); border-radius: 99px; padding: .15rem .7rem; }
+  .chips a:hover { color: var(--fg); }
+  .chips a.on { color: var(--bg); background: var(--fg); }
   .pager { border-top: 1px solid var(--line); padding: 1.15rem 0; font-size: .85rem; }
   .pager a { color: var(--muted); text-decoration: none; }
   .pager a:hover { color: var(--fg); }
@@ -215,6 +246,7 @@ ${items
     <p>New and updated models from the major LLM providers, watched via the models.dev catalog.</p>
     <nav><a href="/feed.json">JSON Feed</a><a href="/rss.xml">RSS</a></nav>
   </header>
+  <nav class="chips">${chips}</nav>
   ${list}
   ${pager}
 </main>

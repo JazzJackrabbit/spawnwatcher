@@ -83,6 +83,8 @@ export interface Item {
   sourceUrl: string;
   kind: string;
   publishedAt: Date;
+  /** models.dev provider id, from the event the item was generated for. */
+  provider?: string;
 }
 
 /** An event paired with the feed item generated from it. */
@@ -206,13 +208,18 @@ export class Store {
     }
   }
 
-  listItems(limit: number, offset = 0): Item[] {
+  listItems(limit: number, offset = 0, provider?: string): Item[] {
+    const where = provider ? "WHERE e.provider = ?" : "";
+    const params: (string | number)[] = provider ? [provider, limit, offset] : [limit, offset];
     const rows = this.db
       .prepare(
-        `SELECT id, title, summary_md, agent_summary, generator, source_url, kind, published_at
-         FROM items ORDER BY published_at DESC, id DESC LIMIT ? OFFSET ?`,
+        `SELECT i.id, i.title, i.summary_md, i.agent_summary, i.generator, i.source_url, i.kind, i.published_at,
+                e.provider
+         FROM items i JOIN events e ON e.id = i.event_id
+         ${where}
+         ORDER BY i.published_at DESC, i.id DESC LIMIT ? OFFSET ?`,
       )
-      .all(limit, offset) as Record<string, string>[];
+      .all(...params) as Record<string, string>[];
     return rows.map((r) => ({
       id: r.id!,
       title: r.title!,
@@ -222,6 +229,7 @@ export class Store {
       sourceUrl: r.source_url!,
       kind: r.kind!,
       publishedAt: new Date(r.published_at!),
+      provider: r.provider!,
     }));
   }
 
