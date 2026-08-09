@@ -1,5 +1,7 @@
 # spawnwatcher
 
+[![CI](https://github.com/JazzJackrabbit/spawnwatcher/actions/workflows/ci.yml/badge.svg)](https://github.com/JazzJackrabbit/spawnwatcher/actions/workflows/ci.yml)
+
 Watches the [models.dev](https://models.dev) catalog for new and updated LLM models, publishes a public news feed, and pushes structured release messages to a downstream server.
 
 Live at [feed.spawnstudio.cc](https://feed.spawnstudio.cc).
